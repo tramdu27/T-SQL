@@ -1,0 +1,106 @@
+Create database AsoftScript
+
+use AsoftScript
+drop table Customers
+create table Customers
+(
+    CustomerID int  primary key,
+    CustomerName nvarchar(50),
+    PhoneNumber nvarchar(50),
+    Email nvarchar(200),
+    Address nvarchar(200)
+)
+drop table Products
+create table Products
+(
+    ProductID nvarchar(50) primary key,
+    ProductName nvarchar(255),
+    ProductPrice DECIMAL(10, 2),
+    Description nvarchar(MAX)
+)
+drop table Orders
+create table Orders
+(
+    OrderID int primary key,
+    CustomerID int,
+	ProductID nvarchar(50),
+    OrderDate date,
+    TotalAmount decimal(10, 2),
+    foreign key (CustomerID) references Customers(CustomerID),
+	foreign key (ProductID) references Products(ProductID)
+)
+drop procedure SearchOrder
+create procedure SearchOrder
+as
+declare @orderID int, 
+@customerName nvarchar(50),
+@productID nvarchar(50),
+@productName nvarchar(255),
+@dateFrom date,
+@datetTo date,
+@searchString nvarchar(50)
+begin
+select * from Orders o
+ JOIN Customers c ON o.CustomerID = c.CustomerID
+    
+    JOIN Products p ON o.ProductID = p.ProductID
+where (@orderID = o.OrderID) 
+	and (c.CustomerName LIKE CONCAT('%', @customerName, '%'))
+	and (p.ProductName LIKE CONCAT('%', @productName, '%'))
+	and ((o.OrderDate >= @dateFrom)
+    and (o.OrderDate <= @datetTo))
+end
+
+select * from Customers
+-- INSERT 100 bản ghi vào bảng Customers
+INSERT INTO Customers (CustomerID,CustomerName, PhoneNumber, Email, Address)
+SELECT TOP 100
+    ROW_NUMBER() OVER (ORDER BY NEWID()) AS CustomerID,
+
+    'Customer' + CAST(ROW_NUMBER() OVER (ORDER BY NEWID()) AS NVARCHAR(255)) AS CustomerName,
+    CONCAT(
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT),
+        CAST((RAND() * 10) AS INT)
+    ) AS PhoneNumber,
+    CONCAT(
+        LEFT(NEWID(), 8), 
+        '@gmail.com'    
+    ) AS Email,
+    CONCAT(
+        'Số ' + CAST(CAST(RAND() * 100 AS INT) AS NVARCHAR(10))+', ' ,
+        'Thành phố ' + CAST(CAST(RAND() * 10 AS INT) AS NVARCHAR(10))+', '  ,
+        'Tỉnh ' + CAST(CAST(RAND() * 10 AS INT) AS NVARCHAR(10))
+    ) AS Address
+	
+FROM master.dbo.spt_values;
+truncate table Customers;
+create procedure pcd_100Record
+as
+DECLARE @Counter int = 1
+WHILE @Counter <= 100
+BEGIN
+    INSERT INTO Customers (CustomerID, CustomerName, PhoneNumber, Email, Address)
+    VALUES (@Counter, 'CustomerName' + CAST(@Counter AS nvarchar(10)), 'PhoneNumber' + CAST(@Counter AS nvarchar(10)), 'Email' + CAST(@Counter AS nvarchar(10)) + '@example.com', 'Address' + CAST(@Counter AS nvarchar(10)))
+    SET @Counter = @Counter + 1
+END
+select * from Customers
+DECLARE @Counter int = 1
+WHILE @Counter <= 100
+BEGIN
+    -- Tạo số điện thoại ngẫu nhiên (ở đây chúng tôi sử dụng RAND())
+    DECLARE @RandomNumber nvarchar(50)
+    SET @RandomNumber = CONCAT('0', LEFT(CAST(CAST(RAND() * 1000000000 AS int) AS nvarchar(10)), 9))
+    
+    INSERT INTO Customers (CustomerID, CustomerName, PhoneNumber, Email, Address)
+    VALUES (@Counter, 'CustomerName' + CAST(@Counter AS nvarchar(10)), @RandomNumber, 'Email' + CAST(@Counter AS nvarchar(10)) + '@example.com', 'Address' + CAST(@Counter AS nvarchar(10)))
+    
+    SET @Counter = @Counter + 1
+END
