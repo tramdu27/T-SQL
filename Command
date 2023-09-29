@@ -15,7 +15,7 @@ create table Products
 (
     ProductID nvarchar(50) primary key,
     ProductName nvarchar(255),
-    ProductPrice DECIMAL(10, 2),
+    ProductPrice decimal(10, 2),
     Description nvarchar(MAX)
 )
 drop table Orders
@@ -51,56 +51,82 @@ where (@orderID = o.OrderID)
     and (o.OrderDate <= @datetTo))
 end
 
+declare @customerCounter int = 1
+while @customerCounter <= 100
+begin
+    insert into Customers (CustomerID, CustomerName, PhoneNumber, Email, Address)
+    values (@customerCounter, 'CustomerName' + cast(@customerCounter as nvarchar(50)), 'PhoneNumber' + cast(@customerCounter as nvarchar(50)), 'Email' + cast(@customerCounter as nvarchar(50)) + '@example.com', 'Address' + cast(@customerCounter as nvarchar(50)))
+    set @customerCounter = @customerCounter + 1
+end
 select * from Customers
--- INSERT 100 bản ghi vào bảng Customers
-INSERT INTO Customers (CustomerID,CustomerName, PhoneNumber, Email, Address)
-SELECT TOP 100
-    ROW_NUMBER() OVER (ORDER BY NEWID()) AS CustomerID,
+-- Thêm dữ liệu ngẫu nhiên cho bảng Products (100 dòng)
+declare @productCounter int = 1
+while @productCounter <= 100
+begin
+    insert into Products (ProductID, ProductName, ProductPrice, Description)
+    values ('ProductID' + cast(@productCounter as nvarchar(50)), 'ProductName' + cast(@productCounter as nvarchar(50)), cast(@productCounter * 10.0 as decimal(10, 3)), 'Description' + cast(@productCounter as nvarchar(50)))
+    set @productCounter = @productCounter + 1
+end
 
-    'Customer' + CAST(ROW_NUMBER() OVER (ORDER BY NEWID()) AS NVARCHAR(255)) AS CustomerName,
-    CONCAT(
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT),
-        CAST((RAND() * 10) AS INT)
-    ) AS PhoneNumber,
-    CONCAT(
-        LEFT(NEWID(), 8), 
-        '@gmail.com'    
-    ) AS Email,
-    CONCAT(
-        'Số ' + CAST(CAST(RAND() * 100 AS INT) AS NVARCHAR(10))+', ' ,
-        'Thành phố ' + CAST(CAST(RAND() * 10 AS INT) AS NVARCHAR(10))+', '  ,
-        'Tỉnh ' + CAST(CAST(RAND() * 10 AS INT) AS NVARCHAR(10))
-    ) AS Address
-	
-FROM master.dbo.spt_values;
-truncate table Customers;
-create procedure pcd_100Record
-as
-DECLARE @Counter int = 1
-WHILE @Counter <= 100
-BEGIN
-    INSERT INTO Customers (CustomerID, CustomerName, PhoneNumber, Email, Address)
-    VALUES (@Counter, 'CustomerName' + CAST(@Counter AS nvarchar(10)), 'PhoneNumber' + CAST(@Counter AS nvarchar(10)), 'Email' + CAST(@Counter AS nvarchar(10)) + '@example.com', 'Address' + CAST(@Counter AS nvarchar(10)))
-    SET @Counter = @Counter + 1
-END
-select * from Customers
-DECLARE @Counter int = 1
-WHILE @Counter <= 100
-BEGIN
-    -- Tạo số điện thoại ngẫu nhiên (ở đây chúng tôi sử dụng RAND())
-    DECLARE @RandomNumber nvarchar(50)
-    SET @RandomNumber = CONCAT('0', LEFT(CAST(CAST(RAND() * 1000000000 AS int) AS nvarchar(10)), 9))
+
+-- Thêm dữ liệu ngẫu nhiên cho bảng Orders (1 triệu dòng trong vòng 2 tháng)
+declare @orderCounter int = 1
+declare @startDate date = '2023-09-29'
+while @orderCounter <= 1000000
+begin
+    -- Lấy một CustomerID ngẫu nhiên từ bảng Customers
+	declare @randomCustomerID nvarchar(50)
+    select top 1 @randomCustomerID = CustomerID from Customers order by newid()
+    -- Lấy một ProductID ngẫu nhiên từ bảng Products
+    declare @randomProductID nvarchar(50)
+    select top 1 @randomProductID = ProductID from Products order by newid()
+	declare @randomProductPrice decimal(10, 2)
+	select @randomProductPrice = ProductPrice from Products p inner join Orders o on p.ProductID= o.ProductID
+    select top 1 @randomProductID = ProductID from Products order by newid()
+    insert into Orders (OrderID, CustomerID, ProductID, OrderDate, TotalAmount)
+    values (@orderCounter, @randomCustomerID, @randomProductID, dateadd(day, cast(rand() * 60 as int), @startDate), cast(rand() * 1000 + 1 as int))
     
-    INSERT INTO Customers (CustomerID, CustomerName, PhoneNumber, Email, Address)
-    VALUES (@Counter, 'CustomerName' + CAST(@Counter AS nvarchar(10)), @RandomNumber, 'Email' + CAST(@Counter AS nvarchar(10)) + '@example.com', 'Address' + CAST(@Counter AS nvarchar(10)))
-    
-    SET @Counter = @Counter + 1
+    set @orderCounter = @orderCounter + 1
+end
+drop table Orders
+truncate table Products
+
+
+-- Tạo một index cho cột OrderDate
+CREATE NONCLUSTERED INDEX IX_OrderDate_YearMonth ON Orders (OrderDate)
+
+-- Sử dụng một computed column để lưu trữ năm và tháng
+ALTER TABLE Orders ADD OrderYear AS YEAR(OrderDate)
+ALTER TABLE Orders ADD OrderMonth AS MONTH(OrderDate)
+
+-- Tạo index trên cột computed
+CREATE NONCLUSTERED INDEX IX_OrderYearMonth ON Orders (OrderYear, OrderMonth)
+-- Sử dụng hint để bắt buộc sử dụng index
+SELECT * FROM Orders WITH(INDEX(IX_OrderYearMonth)) WHERE OrderYear = 2023
+
+
+select * from Customers c join Orders o  on c.CustomerID = o.CustomerID
+
+create procedure GetCustomerByMonth
+    @Start DATE,
+    @End DATE
+AS
+BEGIN
+    SELECT TOP 10
+        c.CustomerID,
+        c.CustomerName,
+        SUM(o.TotalAmount) AS TotalAmount
+    FROM
+        Customers c
+    JOIN
+        Orders o ON c.CustomerID = o.CustomerID
+    WHERE
+        month(o.OrderDate) >= @Start
+        AND month(o.OrderDate) <= @End
+    GROUP BY
+        c.CustomerID, c.CustomerName
+    ORDER BY
+        TotalAmount DESC
 END
+
+
