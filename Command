@@ -1,7 +1,8 @@
+--Tạo database AsoftScipt
 Create database AsoftScript
-
+drop database AsoftScript
 use AsoftScript
-drop table Customers
+--Tạp bảng Customers
 create table Customers
 (
     CustomerID int  primary key,
@@ -10,68 +11,59 @@ create table Customers
     Email nvarchar(200),
     Address nvarchar(200)
 )
-drop table Products
+--Tạo bảng Products
 create table Products
 (
     ProductID nvarchar(50) primary key,
     ProductName nvarchar(255),
-    ProductPrice decimal(10, 2),
+    ProductPrice decimal(10, 3),
     Description nvarchar(MAX)
 )
-drop table Orders
+--Tạo bảng Orders
 create table Orders
 (
     OrderID int primary key,
     CustomerID int,
 	ProductID nvarchar(50),
     OrderDate date,
-    TotalAmount decimal(10, 2),
+	Price decimal(10, 3),
+	Amount int,
+    Total decimal(10, 3),
     foreign key (CustomerID) references Customers(CustomerID),
 	foreign key (ProductID) references Products(ProductID)
 )
-drop procedure SearchOrder
-create procedure SearchOrder
-as
-declare @orderID int, 
-@customerName nvarchar(50),
-@productID nvarchar(50),
-@productName nvarchar(255),
-@dateFrom date,
-@datetTo date,
-@searchString nvarchar(50)
-begin
-select * from Orders o
- JOIN Customers c ON o.CustomerID = c.CustomerID
-    
-    JOIN Products p ON o.ProductID = p.ProductID
-where (@orderID = o.OrderID) 
-	and (c.CustomerName LIKE CONCAT('%', @customerName, '%'))
-	and (p.ProductName LIKE CONCAT('%', @productName, '%'))
-	and ((o.OrderDate >= @dateFrom)
-    and (o.OrderDate <= @datetTo))
-end
-
+--Thêm dữ liệu ngẫu nhiên cho bảng Customers
+--Khai báo biến @CustomerCounter đếm số lượng khách hàng
 declare @customerCounter int = 1
+--Vòng lặp thêm dữ liệu cho 100 khách hàng
 while @customerCounter <= 100
 begin
+--Thêm dữ liệu vào bảng Customers
     insert into Customers (CustomerID, CustomerName, PhoneNumber, Email, Address)
     values (@customerCounter, 'CustomerName' + cast(@customerCounter as nvarchar(50)), 'PhoneNumber' + cast(@customerCounter as nvarchar(50)), 'Email' + cast(@customerCounter as nvarchar(50)) + '@example.com', 'Address' + cast(@customerCounter as nvarchar(50)))
-    set @customerCounter = @customerCounter + 1
+    --Tăng giá trị cho @customerCounter sau mỗi lần lặp
+	set @customerCounter = @customerCounter + 1
 end
 select * from Customers
 -- Thêm dữ liệu ngẫu nhiên cho bảng Products (100 dòng)
+--Khai báo biến @productCounter đếm số lượng sản phẩm
 declare @productCounter int = 1
+--Vòng lặp thêm dữ liệu cho 100 sản phẩm
 while @productCounter <= 100
 begin
+--Thêm dữ liệu vào bảng sản phẩm 
     insert into Products (ProductID, ProductName, ProductPrice, Description)
-    values ('ProductID' + cast(@productCounter as nvarchar(50)), 'ProductName' + cast(@productCounter as nvarchar(50)), cast(@productCounter * 10.0 as decimal(10, 3)), 'Description' + cast(@productCounter as nvarchar(50)))
-    set @productCounter = @productCounter + 1
+    values ('ProductID' + cast(@productCounter as nvarchar(50)), 'ProductName' + cast(@productCounter as nvarchar(50)),FLOOR(RAND() * 100) + 1 , 'Description' + cast(@productCounter as nvarchar(50)))
+    --Tăng giá trị cho @productCounter sau mỗi lần lặp
+	set @productCounter = @productCounter + 1
 end
 
-
 -- Thêm dữ liệu ngẫu nhiên cho bảng Orders (1 triệu dòng trong vòng 2 tháng)
+--Khai báo biến @orderCounter để đếm số lượng đơn hàng
 declare @orderCounter int = 1
-declare @startDate date = '2023-09-29'
+--khai báo ngày bắt đầu tạo đơn hàng trong vòng 2 tháng
+declare @startDate date = '2023-11-1'
+--vòng lặp thêm 1000000 đơn hàng
 while @orderCounter <= 1000000
 begin
     -- Lấy một CustomerID ngẫu nhiên từ bảng Customers
@@ -80,53 +72,160 @@ begin
     -- Lấy một ProductID ngẫu nhiên từ bảng Products
     declare @randomProductID nvarchar(50)
     select top 1 @randomProductID = ProductID from Products order by newid()
-	declare @randomProductPrice decimal(10, 2)
-	select @randomProductPrice = ProductPrice from Products p inner join Orders o on p.ProductID= o.ProductID
-    select top 1 @randomProductID = ProductID from Products order by newid()
-    insert into Orders (OrderID, CustomerID, ProductID, OrderDate, TotalAmount)
-    values (@orderCounter, @randomCustomerID, @randomProductID, dateadd(day, cast(rand() * 60 as int), @startDate), cast(rand() * 1000 + 1 as int))
-    
+	--Lấy Giá của sản phẩm theo @randomProductID
+    declare @randomProductPrice decimal(10, 2)
+select top 1 @randomProductPrice = ProductPrice
+from Products
+where ProductID = @randomProductID -- Sử dụng @randomProductID từ bảng Orders
+order by newid()
+--Khai báo số lượng sản phẩm ngẫu nhiên 
+declare @randomAmount int;
+set @randomAmount = FLOOR(RAND() * 10) + 1;
+--Thêm dữ liệu vào bảng Orders
+    insert into Orders (OrderID, CustomerID, ProductID, OrderDate,Price ,Amount,Total)
+    values (@orderCounter, @randomCustomerID, @randomProductID, dateadd(day, cast(rand() * 60 as int), @startDate),@randomProductPrice ,@randomAmount,@randomProductPrice*@randomamount)
+    --Biến @orderCounter tăng thêm 1 giá trị sau khi dữ liệu được thêm vào
     set @orderCounter = @orderCounter + 1
+
+	
 end
-drop table Orders
-truncate table Products
 
 
--- Tạo một index cho cột OrderDate
-CREATE NONCLUSTERED INDEX IX_OrderDate_YearMonth ON Orders (OrderDate)
-
--- Sử dụng một computed column để lưu trữ năm và tháng
-ALTER TABLE Orders ADD OrderYear AS YEAR(OrderDate)
-ALTER TABLE Orders ADD OrderMonth AS MONTH(OrderDate)
-
--- Tạo index trên cột computed
-CREATE NONCLUSTERED INDEX IX_OrderYearMonth ON Orders (OrderYear, OrderMonth)
--- Sử dụng hint để bắt buộc sử dụng index
-SELECT * FROM Orders WITH(INDEX(IX_OrderYearMonth)) WHERE OrderYear = 2023
 
 
-select * from Customers c join Orders o  on c.CustomerID = o.CustomerID
+--Thêm cột OrderYear lưu năm của cột OrderDate
+alter table Orders add OrderYear as year(OrderDate)
+--Thêm cột OrderMonth lưu tháng của cột OrderDate
+alter table Orders add OrderMonth as month(OrderDate)
 
+--Thêm index cho Bảng Orders dựa trên cột OrderYear, OrdersMonth
+create nonclustered index Index_OrderYearMonth on Orders (OrderYear, OrderMonth)
+--truy vấn dữ liệu từ bảng Orders sử dụng Index Index_OrderYearMonth  với điều kiện OrderMonth =11
+select * from Orders with(index(Index_OrderYearMonth)) where OrderMonth = 11
+
+--Tạo procedure Tìm kiếm top 10 khách hàng mua nhiều nhất theo tháng
 create procedure GetCustomerByMonth
-    @Start DATE,
-    @End DATE
-AS
-BEGIN
-    SELECT TOP 10
+--khai báo biến @month để tìm dữ liệu theo tháng
+    @month int
+as
+begin
+    select top 10
         c.CustomerID,
         c.CustomerName,
-        SUM(o.TotalAmount) AS TotalAmount
-    FROM
+        sum(o.Total) as TotalAmount
+    from
         Customers c
-    JOIN
-        Orders o ON c.CustomerID = o.CustomerID
-    WHERE
-        month(o.OrderDate) >= @Start
-        AND month(o.OrderDate) <= @End
-    GROUP BY
+    join
+        Orders o on c.CustomerID = o.CustomerID
+    where
+        month(o.OrderDate) = @month
+    group by
         c.CustomerID, c.CustomerName
-    ORDER BY
-        TotalAmount DESC
-END
+    order by
+        TotalAmount desc
+end
+exec GetCustomerByMonth @month = 10; 
 
 
+create procedure GetCustomerByDate
+    @startDate date,
+    @endDate date
+as
+begin
+       select top 10
+        c.CustomerID,
+        c.CustomerName,
+        sum(o.Total) as TotalAmount
+    from
+        Customers c
+    join
+        Orders o on c.CustomerID = o.CustomerID
+    where
+        o.OrderDate >= @startDate AND o.OrderDate < @endDate
+    group by
+        c.CustomerID, c.CustomerName
+    order by
+        TotalAmount desc
+end
+exec GetCustomerByDate @startDate = '2023-09-01', @endDate = '2023-10-09';
+drop procedure GetCustomerByDate
+select * from Orders
+
+create procedure GetTopProducts
+@month int
+as begin
+select top 10
+    p.ProductID,
+    p.ProductName,
+    sum(o.Amount) as Total
+from
+    Orders o
+join
+    Products p on o.ProductID = p.ProductID
+where
+    month(o.OrderDate) = @month
+group by
+    p.ProductID, p.ProductName
+order by
+    Total desc;
+end
+exec GetTopProducts @month =11
+select * from Orders where ProductID = 'ProductID36'
+create procedure GetBotProducts
+@month int
+as begin
+select top 10
+    p.ProductID,
+    p.ProductName,
+    sum(o.Amount) as Total
+from
+    Orders o
+join
+    Products p on o.ProductID = p.ProductID
+where
+    month(o.OrderDate) = @month
+group by
+    p.ProductID, p.ProductName
+order by
+    Total asc;
+end
+exec GetBotProducts @month = 11
+
+create procedure GetOrdersByFilter
+    @OrderID int = null,
+    @CustomerID int = null,
+    @CustomerName nvarchar(255) = null,
+    @ProductID int = null,
+    @ProductName nvarchar(255) = null,
+    @StartDate date = null,
+    @EndDate date = null
+as
+begin
+    select 
+        o.OrderID,
+        o.CustomerID,
+        c.CustomerName,
+        o.ProductID,
+        p.ProductName,
+        o.OrderDate
+    from
+        Orders o
+    join
+        Customers c on o.CustomerID = c.CustomerID
+    join
+        Products p on o.ProductID = p.ProductID
+    where
+        (@OrderID is null or o.OrderID = @OrderID)
+        and (@CustomerID is null or o.CustomerID = @CustomerID)
+        and (@CustomerName is null or c.CustomerName LIKE '%' + @CustomerName + '%')
+        and (@ProductID is null or o.ProductID = @ProductID)
+        and (@ProductName is null or p.ProductName LIKE '%' + @ProductName + '%')
+        and (@StartDate is null or o.OrderDate >= @StartDate)
+        and (@EndDate is null or o.OrderDate <= @EndDate)
+end
+exec GetOrdersByFilter @CustomerID = 10;
+
+exec GetOrdersByFilter @OrderID = 10;
+
+
+exec GetOrdersByFilter @StartDate = '2023-01-01', @EndDate = '2023-12-31';
