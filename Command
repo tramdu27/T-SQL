@@ -32,6 +32,8 @@ create table Orders
     foreign key (CustomerID) references Customers(CustomerID),
 	foreign key (ProductID) references Products(ProductID)
 )
+
+
 --Thêm dữ liệu ngẫu nhiên cho bảng Customers
 --Khai báo biến @CustomerCounter đếm số lượng khách hàng
 declare @customerCounter int = 1
@@ -44,7 +46,9 @@ begin
     --Tăng giá trị cho @customerCounter sau mỗi lần lặp
 	set @customerCounter = @customerCounter + 1
 end
-select * from Customers
+
+
+
 -- Thêm dữ liệu ngẫu nhiên cho bảng Products (100 dòng)
 --Khai báo biến @productCounter đếm số lượng sản phẩm
 declare @productCounter int = 1
@@ -57,6 +61,8 @@ begin
     --Tăng giá trị cho @productCounter sau mỗi lần lặp
 	set @productCounter = @productCounter + 1
 end
+
+
 
 -- Thêm dữ liệu ngẫu nhiên cho bảng Orders (1 triệu dòng trong vòng 2 tháng)
 --Khai báo biến @orderCounter để đếm số lượng đơn hàng
@@ -86,10 +92,7 @@ set @randomAmount = FLOOR(RAND() * 10) + 1;
     values (@orderCounter, @randomCustomerID, @randomProductID, dateadd(day, cast(rand() * 60 as int), @startDate),@randomProductPrice ,@randomAmount,@randomProductPrice*@randomamount)
     --Biến @orderCounter tăng thêm 1 giá trị sau khi dữ liệu được thêm vào
     set @orderCounter = @orderCounter + 1
-
-	
 end
-
 
 
 
@@ -103,80 +106,102 @@ create nonclustered index Index_OrderYearMonth on Orders (OrderYear, OrderMonth)
 --truy vấn dữ liệu từ bảng Orders sử dụng Index Index_OrderYearMonth  với điều kiện OrderMonth =11
 select * from Orders with(index(Index_OrderYearMonth)) where OrderMonth = 11
 
+
 --Tạo procedure Tìm kiếm top 10 khách hàng mua nhiều nhất theo tháng
 create procedure GetCustomerByMonth
 --khai báo biến @month để tìm dữ liệu theo tháng
     @month int
 as
 begin
+--Chọn 10 bản ghi đầu tiên
     select top 10
         c.CustomerID,
         c.CustomerName,
+		--Tính tổng tiền các đơn hàng từ bảng Orders
         sum(o.Total) as TotalAmount
     from
         Customers c
     join
         Orders o on c.CustomerID = o.CustomerID
+		--điều kiện lọc đơn hàng
     where
         month(o.OrderDate) = @month
     group by
         c.CustomerID, c.CustomerName
-    order by
+    --sắp xếp theo thứ tự giảm dần
+	order by
         TotalAmount desc
 end
+--Ví dụ thực hiện procedure với @month = 10
 exec GetCustomerByMonth @month = 10; 
 
 
+
+--Tạo procedure tìm top 10 khách hàng mua nhiều nhất theo ngày
 create procedure GetCustomerByDate
+--Khai báo biến @startDate: ngày bắt đầu, @endDate: ngày kết thúc
     @startDate date,
     @endDate date
 as
 begin
+--Chọn 10 bản ghi đầu tiên
        select top 10
         c.CustomerID,
         c.CustomerName,
+--Tính tổng tiền các đơn hàng từ bảng Orders
         sum(o.Total) as TotalAmount
     from
         Customers c
     join
         Orders o on c.CustomerID = o.CustomerID
     where
+	--Điều kiện lọc kết quả truy vấn
         o.OrderDate >= @startDate AND o.OrderDate < @endDate
     group by
         c.CustomerID, c.CustomerName
     order by
         TotalAmount desc
 end
+--ví dụ thực hiện procedure với @startDate = '2023-09-01', @endDate = '2023-10-09'
 exec GetCustomerByDate @startDate = '2023-09-01', @endDate = '2023-10-09';
-drop procedure GetCustomerByDate
-select * from Orders
 
+
+--Tạo procedure chọn top 10 sản phẩm được mua nhiều nhất trong tháng
 create procedure GetTopProducts
+--Khai báo biến @month để tìm dữ liệu theo tháng
 @month int
 as begin
+--Chọn 10 bản ghi đầu tiên
 select top 10
     p.ProductID,
     p.ProductName,
+	--Tính tổng số lượng sản phẩm trong bảng Orders theo ProductID
     sum(o.Amount) as Total
 from
     Orders o
 join
     Products p on o.ProductID = p.ProductID
 where
+--Điều kiện lọc kết quả truy vấn 
     month(o.OrderDate) = @month
 group by
     p.ProductID, p.ProductName
 order by
     Total desc;
 end
+--ví dụ thực hiện procedure với @month = 11
 exec GetTopProducts @month =11
-select * from Orders where ProductID = 'ProductID36'
+
+
+--Tạo procedure tìm top sản phẩm được mua ít nhất trong tháng 
 create procedure GetBotProducts
+--Khai báo biến @month để tìm dữ liệu theo tháng
 @month int
 as begin
 select top 10
     p.ProductID,
     p.ProductName,
+--Tính tổng số lượng sản phẩm trong bảng Orders theo ProductID
     sum(o.Amount) as Total
 from
     Orders o
@@ -187,16 +212,28 @@ where
 group by
     p.ProductID, p.ProductName
 order by
+--sắp xếp theo thứ tự tăng dần
     Total asc;
 end
+--ví dụ thực hiện procedure với @month = 11
 exec GetBotProducts @month = 11
 
+
+--4.	Tạo store procedure tìm danh sách đơn hàng theo các điều kiện Lọc: Mã đơn hàng, mã/tên khách hàng,
+--Mã/tên mặt hàng trong đơn hàng, Ngày tạo đơn hàng trong khoảng Từ - Đến
 create procedure GetOrdersByFilter
+--Khai báo biến 
+	--Tìm theo ID đơn hàng
     @OrderID int = null,
+	--Tìm theo ID khách hàng
     @CustomerID int = null,
+	--Tìm theo tên khách hàng
     @CustomerName nvarchar(255) = null,
+	--Tìm theo ID sản phẩm 
     @ProductID int = null,
+	--Tìm theo tên sản phẩm 
     @ProductName nvarchar(255) = null,
+	--Tìm theo khoảng ngày
     @StartDate date = null,
     @EndDate date = null
 as
@@ -215,17 +252,23 @@ begin
     join
         Products p on o.ProductID = p.ProductID
     where
+	--Kiểm tra giá trị của biến có null hay không, nếu không thì giá trị của biến là điều kiền lọc kết quả 
         (@OrderID is null or o.OrderID = @OrderID)
         and (@CustomerID is null or o.CustomerID = @CustomerID)
         and (@CustomerName is null or c.CustomerName LIKE '%' + @CustomerName + '%')
         and (@ProductID is null or o.ProductID = @ProductID)
         and (@ProductName is null or p.ProductName LIKE '%' + @ProductName + '%')
+        --Lọc theo khoảng thời gian
         and (@StartDate is null or o.OrderDate >= @StartDate)
         and (@EndDate is null or o.OrderDate <= @EndDate)
 end
-exec GetOrdersByFilter @CustomerID = 10;
+--ví dụ thực hiện procedure với @CustomerID = 10
+exec GetOrdersByFilter @CustomerID = 10
 
-exec GetOrdersByFilter @OrderID = 10;
+--ví dụ thực hiện procedure với @OrderID = 10
+exec GetOrdersByFilter @OrderID = 10
+
+--ví dụ thực hiện procedure với @StartDate = '2023-01-01', @EndDate = '2023-12-31'
+exec GetOrdersByFilter @StartDate = '2023-01-01', @EndDate = '2023-12-31'
 
 
-exec GetOrdersByFilter @StartDate = '2023-01-01', @EndDate = '2023-12-31';
